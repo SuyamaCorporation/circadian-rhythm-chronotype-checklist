@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概日リズム・クロノタイプ診断チェックリスト</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen">
+<div class="max-w-2xl mx-auto px-4 py-8">
+  <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 text-center">
+    <h1 class="text-2xl font-bold text-gray-800 mb-1">概日リズム・クロノタイプ診断</h1>
+    <p class="text-gray-500 text-sm">MEQベース 19問 ― あなたの朝型/夜型を判定</p>
+  </div>
+
+  <!-- Quiz -->
+  <div id="quiz-section">
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+      <div class="flex justify-between items-center mb-4">
+        <span class="text-sm text-gray-500">質問 <span id="q-num">1</span> / 19</span>
+        <div class="w-40 bg-gray-200 rounded-full h-2">
+          <div id="q-progress" class="bg-indigo-500 h-2 rounded-full transition-all" style="width:5%"></div>
+        </div>
+      </div>
+      <p id="q-text" class="text-gray-800 font-semibold text-base mb-5 leading-relaxed"></p>
+      <div id="q-options" class="space-y-2"></div>
+      <div class="flex gap-3 mt-6">
+        <button onclick="prevQ()" id="btn-prev" aria-label="前の質問に戻る" class="flex-1 py-2 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition disabled:opacity-40" disabled>◀ 前へ</button>
+        <button onclick="nextQ()" id="btn-next" aria-label="次の質問へ進む" class="flex-1 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition disabled:opacity-40" disabled>次へ ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result-section" class="hidden">
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 text-center">
+      <div id="type-icon" class="text-6xl mb-3"></div>
+      <h2 id="type-name" class="text-2xl font-bold mb-1"></h2>
+      <p id="type-score" class="text-gray-500 text-sm mb-3"></p>
+      <p id="type-desc" class="text-gray-700 text-sm leading-relaxed"></p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+      <h3 class="text-lg font-bold text-gray-800 mb-4">推奨タイムスケジュール</h3>
+      <svg id="clock-svg" viewBox="0 0 320 320" class="w-56 h-56 mx-auto mb-4" aria-label="24時間円グラフ"></svg>
+      <div id="schedule-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+      <h3 class="text-lg font-bold text-gray-800 mb-4">生活チェックリスト</h3>
+      <div id="checklist-items" class="space-y-2"></div>
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="resetQuiz()" aria-label="もう一度診断する" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">もう一度診断</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+const QUESTIONS = [
+  {text:'ちょうど良いと感じる「起床時刻」はいつですか？',opts:[{l:'午前5時前',v:5},{l:'午前5〜6時半',v:4},{l:'午前6時半〜7時半',v:3},{l:'午前7時半〜9時半',v:2},{l:'午前9時半以降',v:1}]},
+  {text:'夕方6時から翌朝0時の間に、眠くなって横になるとしたら何時が最も自然ですか？',opts:[{l:'午後8〜9時',v:5},{l:'午後9〜10時',v:4},{l:'午後10〜11時',v:3},{l:'午前0時〜1時',v:2},{l:'午前1時以降',v:1}]},
+  {text:'朝何時に起きなければならない場合、目覚まし時計にどのくらい依存しますか？',opts:[{l:'全く依存しない',v:4},{l:'少し依存する',v:3},{l:'ある程度依存する',v:2},{l:'非常に依存する',v:1}]},
+  {text:'朝、起床後どのくらいで「シャキッとする」感覚になりますか？',opts:[{l:'0〜10分',v:4},{l:'11〜20分',v:3},{l:'21〜40分',v:2},{l:'41分以上',v:1}]},
+  {text:'朝食の空腹感は起床後どのくらいで感じますか？',opts:[{l:'0〜15分',v:4},{l:'15〜30分',v:3},{l:'31〜60分',v:2},{l:'60分以上（または食欲なし）',v:1}]},
+  {text:'朝6〜8時の間のパフォーマンス（思考力・集中力）はどうですか？',opts:[{l:'非常に高い',v:4},{l:'まあまあ高い',v:3},{l:'あまり高くない',v:2},{l:'非常に低い',v:1}]},
+  {text:'夜10〜11時の間のパフォーマンスはどうですか？',opts:[{l:'非常に低い',v:4},{l:'あまり高くない',v:3},{l:'まあまあ高い',v:2},{l:'非常に高い',v:1}]},
+  {text:'運動をするとしたら、いつが最も楽しく感じますか？',opts:[{l:'午前6〜8時',v:4},{l:'午前8〜10時',v:3},{l:'正午〜午後3時',v:2},{l:'午後5時以降',v:1}]},
+  {text:'一日の中で「最も調子が良い」と感じる時間帯は？',opts:[{l:'朝（5〜8時）',v:5},{l:'午前中（8〜11時）',v:4},{l:'昼（11〜14時）',v:3},{l:'午後（14〜17時）',v:2},{l:'夕方以降（17時〜）',v:1}]},
+  {text:'夜更かしした翌日の体調はどうですか？',opts:[{l:'翌朝すぐ回復する',v:4},{l:'午前中には回復する',v:3},{l:'午後になれば回復する',v:2},{l:'終日つらい',v:1}]},
+  {text:'明日から自由な生活を送るとしたら、自然に何時に起きますか？',opts:[{l:'午前6時前',v:5},{l:'午前6〜7時半',v:4},{l:'午前7時半〜9時',v:3},{l:'午前9〜11時',v:2},{l:'午前11時以降',v:1}]},
+  {text:'夜眠くなる時間（自然に眠りにつく時間）は？',opts:[{l:'午後9〜10時',v:5},{l:'午後10〜11時',v:4},{l:'午前0〜1時',v:3},{l:'午前1〜2時',v:2},{l:'午前2時以降',v:1}]},
+  {text:'平日と休日の起床時刻の差（社会的時差ぼけ）はどのくらいですか？',opts:[{l:'30分未満',v:4},{l:'30分〜1時間',v:3},{l:'1〜2時間',v:2},{l:'2時間以上',v:1}]},
+  {text:'昼寝をする習慣がありますか？',opts:[{l:'ほぼ毎日（リフレッシュになる）',v:3},{l:'週数回',v:2},{l:'ほとんどしない',v:3},{l:'したいが眠れない',v:1}]},
+  {text:'夕食は何時が一番食欲がありますか？',opts:[{l:'午後5〜6時',v:4},{l:'午後6〜7時半',v:3},{l:'午後7時半〜9時',v:2},{l:'午後9時以降',v:1}]},
+  {text:'睡眠の質はどうですか？',opts:[{l:'非常に良い（すぐ眠れ、目覚めも良い）',v:4},{l:'まあ良い',v:3},{l:'やや悪い',v:2},{l:'非常に悪い',v:1}]},
+  {text:'集中した作業は何時に最もはかどりますか？',opts:[{l:'午前6〜10時',v:4},{l:'午前10〜12時',v:3},{l:'午後2〜5時',v:2},{l:'午後8時以降',v:1}]},
+  {text:'体温が「一番高く感じる」時間帯は？（活動的になれる感覚）',opts:[{l:'午前中',v:4},{l:'昼前後',v:3},{l:'午後',v:2},{l:'夜',v:1}]},
+  {text:'あなた自身を「朝型/夜型」でどう評価しますか？',opts:[{l:'完全な朝型',v:6},{l:'やや朝型',v:4},{l:'中間型',v:3},{l:'やや夜型',v:2},{l:'完全な夜型',v:0}]},
+];
+
+const TYPES = [
+  {min:70, name:'超朝型', icon:'🌅', desc:'非常に早起き傾向。午前4〜6時台に自然と目覚め、日中に最高パフォーマンスを発揮。夜は早めに眠くなります。', sleep:'21:00〜22:30', wake:'04:30〜05:30', peak:'06:00〜10:00', meal:'06:00 / 11:30 / 17:30', exercise:'06:00〜08:00', checklist:['起床後すぐ朝日を浴びる','朝のルーティン（運動・読書）を活用','夕食は17:30〜19:00に済ませる','夜のブルーライトを21:00以降は避ける','重要タスクは午前中に集中させる']},
+  {min:59, name:'朝型', icon:'☀️', desc:'朝に強く、午前中のパフォーマンスが高いタイプ。規則正しい生活が自然に合っています。', sleep:'22:00〜23:30', wake:'05:30〜06:30', peak:'08:00〜12:00', meal:'07:00 / 12:00 / 18:00', exercise:'07:00〜09:00', checklist:['起床後30分で朝食を取る','午前中に高集中タスクをこなす','ランチ後の15分仮眠が効果的','夕食は18〜19時台が理想','就寝1時間前からスクリーンを暗くする']},
+  {min:42, name:'中間型', icon:'🌤️', desc:'最も一般的なタイプ。標準的な社会スケジュールとよく合います。柔軟性が高く、朝型/夜型寄りにも適応できます。', sleep:'23:00〜00:00', wake:'06:30〜07:30', peak:'10:00〜14:00', meal:'07:30 / 12:30 / 18:30', exercise:'08:00〜10:00 / 17:00〜19:00', checklist:['起床・就寝時刻をなるべく一定に保つ','昼食後にエネルギーが落ちやすい点に注意','カフェインは午後2時以降を避ける','週末の寝だめは1時間以内にとどめる','夕方の軽い運動が睡眠の質を上げる']},
+  {min:31, name:'夜型', icon:'🌙', desc:'夕方から夜にパフォーマンスが上がるタイプ。朝の立ち上がりは遅め。夜の仕事や活動が得意。', sleep:'00:30〜01:30', wake:'08:00〜09:30', peak:'14:00〜20:00', meal:'09:00 / 13:30 / 20:00', exercise:'17:00〜21:00', checklist:['起床後はすぐカーテンを開け光を浴びる','カフェインの活用で午前の眠気を緩和','重要な会議・作業は午後に設定','夜の集中力を活かすタスクを用意','就寝0.5時間前にリラックスルーティン']},
+  {min:0,  name:'超夜型', icon:'🌃', desc:'深夜に最も活発になるタイプ。午前3〜4時台まで覚醒し、昼前まで眠るのが自然。社会的時差ぼけに注意。', sleep:'02:00〜03:30', wake:'10:00〜12:00', peak:'16:00〜23:00', meal:'10:30 / 15:00 / 21:00', exercise:'18:00〜22:00', checklist:['朝の光療法（1万ルクス照明30分）で位相前進を試みる','起床後すぐカフェインで覚醒を助ける','メラトニンを就寝2時間前に0.5mg試してみる','休日でも起床時刻を2時間以上ずらさない','深夜の食事は翌朝の代謝に影響するため注意']},
+];
+
+let answers = new Array(19).fill(null);
+let currentQ = 0;
+
+function getType(score){
+  return TYPES.find(t=>score>=t.min) || TYPES[TYPES.length-1];
+}
+
+function calcScore(){
+  return answers.reduce((s,v)=>s+(v||0),0);
+}
+
+function renderQ(){
+  const q=QUESTIONS[currentQ];
+  document.getElementById('q-num').textContent=currentQ+1;
+  document.getElementById('q-progress').style.width=((currentQ+1)/19*100)+'%';
+  document.getElementById('q-text').textContent=q.text;
+  const opts=document.getElementById('q-options');
+  opts.innerHTML='';
+  q.opts.forEach((opt,i)=>{
+    const btn=document.createElement('button');
+    btn.setAttribute('aria-label', opt.l);
+    const selected=answers[currentQ]===opt.v;
+    btn.className='w-full text-left px-4 py-3 rounded-xl border-2 transition font-medium text-sm '+(selected?'border-indigo-500 bg-indigo-50 text-indigo-800':'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700');
+    btn.textContent=opt.l;
+    btn.onclick=()=>{ answers[currentQ]=opt.v; renderQ(); };
+    opts.appendChild(btn);
+  });
+  document.getElementById('btn-prev').disabled=currentQ===0;
+  document.getElementById('btn-next').disabled=answers[currentQ]===null;
+  if(currentQ===18){
+    document.getElementById('btn-next').textContent='診断する ✨';
+  } else {
+    document.getElementById('btn-next').textContent='次へ ▶';
+  }
+}
+
+function nextQ(){
+  if(answers[currentQ]===null) return;
+  if(currentQ===18){ showResult(); return; }
+  currentQ++;
+  renderQ();
+}
+
+function prevQ(){
+  if(currentQ>0){ currentQ--; renderQ(); }
+}
+
+function drawClock(type){
+  const cx=160, cy=160, r=120, innerR=60;
+  const sections=[
+    {label:'睡眠', start:parseHour(type.sleep.split('〜')[0]), end:parseHour(type.wake.split('〜')[0]), color:'#818CF8'},
+    {label:'ピーク', start:parseHour(type.peak.split('〜')[0]), end:parseHour(type.peak.split('〜')[1]), color:'#FCD34D'},
+    {label:'食事', start:parseHour(type.meal.split(' / ')[0]), end:parseHour(type.meal.split(' / ')[0])+1, color:'#34D399'},
+  ];
+  let svg=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#F3F4F6"/>`;
+  // Hour ticks
+  for(let h=0;h<24;h++){
+    const ang=(h/24)*Math.PI*2 - Math.PI/2;
+    const x1=cx+Math.cos(ang)*(r-10);const y1=cy+Math.sin(ang)*(r-10);
+    const x2=cx+Math.cos(ang)*(r-2);const y2=cy+Math.sin(ang)*(r-2);
+    svg+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#9CA3AF" stroke-width="${h%6===0?2:1}"/>`;
+    if(h%6===0){
+      const lx=cx+Math.cos(ang)*(r-22);const ly=cy+Math.sin(ang)*(r-22);
+      svg+=`<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#374151">${h}</text>`;
+    }
+  }
+  // Sleep arc
+  const sleepStart=parseHour(type.sleep.split('〜')[0]);
+  const sleepEnd=parseHour(type.wake.split('〜')[0])+1;
+  svg+=arcPath(cx,cy,r-14,sleepStart,sleepEnd,'#818CF8',16,'睡眠');
+  // Peak arc
+  const peakStart=parseHour(type.peak.split('〜')[0]);
+  const peakEnd=parseHour(type.peak.split('〜')[1]);
+  svg+=arcPath(cx,cy,r-14,peakStart,peakEnd,'#FCD34D',16,'集中');
+  // Center
+  svg+=`<circle cx="${cx}" cy="${cy}" r="${innerR}" fill="white"/>`;
+  svg+=`<text x="${cx}" y="${cy-8}" text-anchor="middle" font-size="14" font-weight="bold" fill="#4F46E5">${escHtml(type.name)}</text>`;
+  svg+=`<text x="${cx}" y="${cy+12}" text-anchor="middle" font-size="28">${escHtml(type.icon)}</text>`;
+  document.getElementById('clock-svg').innerHTML=svg;
+}
+
+function arcPath(cx,cy,r,hStart,hEnd,color,thickness,label){
+  const toRad=h=>(h/24)*Math.PI*2-Math.PI/2;
+  const a1=toRad(hStart), a2=toRad(hEnd);
+  const r2=r-thickness/2+2, r1=r-thickness+2;
+  const x1=cx+Math.cos(a1)*r;const y1=cy+Math.sin(a1)*r;
+  const x2=cx+Math.cos(a2)*r;const y2=cy+Math.sin(a2)*r;
+  const lf=((hEnd-hStart+24)%24)>12?1:0;
+  return `<path d="M${x1} ${y1} A${r} ${r} 0 ${lf} 1 ${x2} ${y2}" fill="none" stroke="${color}" stroke-width="${thickness}" stroke-linecap="round" opacity="0.7"/>`;
+}
+
+function parseHour(s){
+  const m=s.match(/(\d+):(\d+)/);
+  if(!m) return 0;
+  return parseInt(m[1])+(parseInt(m[2])/60);
+}
+
+function showResult(){
+  const score=calcScore();
+  const type=getType(score);
+  document.getElementById('quiz-section').classList.add('hidden');
+  document.getElementById('result-section').classList.remove('hidden');
+  document.getElementById('type-icon').textContent=type.icon;
+  document.getElementById('type-name').textContent=type.name;
+  document.getElementById('type-score').textContent='スコア: '+score+' / 86点';
+  document.getElementById('type-desc').textContent=type.desc;
+
+  const sch=document.getElementById('schedule-list');
+  sch.innerHTML=[
+    {label:'推奨就寝',val:type.sleep,icon:'😴'},
+    {label:'推奨起床',val:type.wake,icon:'⏰'},
+    {label:'集中ピーク',val:type.peak,icon:'🧠'},
+    {label:'食事時間',val:type.meal,icon:'🍽️'},
+    {label:'運動推奨',val:type.exercise,icon:'🏃'},
+  ].map(x=>`<div class="flex items-center gap-2 p-2 bg-gray-50 rounded-lg text-sm"><span class="text-lg">${escHtml(x.icon)}</span><span class="text-gray-500 w-20 shrink-0">${escHtml(x.label)}</span><span class="font-semibold text-gray-800">${escHtml(x.val)}</span></div>`).join('');
+
+  const cl=document.getElementById('checklist-items');
+  cl.innerHTML=type.checklist.map(item=>`<label class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-indigo-50 transition"><input type="checkbox" aria-label="${escHtml(item)}" class="mt-0.5 w-4 h-4 text-indigo-600 rounded"><span class="text-sm text-gray-700">${escHtml(item)}</span></label>`).join('');
+
+  drawClock(type);
+  localStorage.setItem('chronotype-result-2026', JSON.stringify({score, typeName:type.name, answers}));
+}
+
+function resetQuiz(){
+  answers=new Array(19).fill(null);
+  currentQ=0;
+  document.getElementById('result-section').classList.add('hidden');
+  document.getElementById('quiz-section').classList.remove('hidden');
+  renderQ();
+}
+
+// Load previous result if exists
+const saved=JSON.parse(localStorage.getItem('chronotype-result-2026')||'null');
+if(saved && saved.answers && saved.answers.length===19){
+  answers=saved.answers;
+  showResult();
+} else {
+  renderQ();
+}
+</script>
+</body>
+</html>
